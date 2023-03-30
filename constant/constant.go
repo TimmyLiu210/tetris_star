@@ -51,3 +51,8 @@ const (
 	OWNERSTATETRUE  string = "true"
 	OWNERSTATEFALSE string = "false"
 )
+// room state
+const (
+	ROOMSTATEPLAYING string = "playing"
+	ROOMSTATEWAITING string = "waiting"
+)

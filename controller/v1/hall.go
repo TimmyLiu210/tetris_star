@@ -7,7 +7,7 @@ import (
 	"tetris/postgresql"
 	"tetris/redis"
 
-"github.com/lithammer/shortuuid"
+	"github.com/lithammer/shortuuid"
 	"gopkg.in/olahol/melody.v1"
 )
 
@@ -81,7 +81,6 @@ func SignIn(m *melody.Melody, s *melody.Session, msg []byte) {
 
 	redis.InitializePlayerInfo(ids[0], *playerInfo)
 
-	BroadcastToPlayers(m,[]byte("log in"), constant.PLACEHALL)
 
 	constant.ResponeWithData(m, s, constant.SUCCESS, ids)
 	return
@@ -97,9 +96,10 @@ func InRoom(m *melody.Melody, s *melody.Session, msg []byte) {
 		EventType int    `json:"event_type"`
 		Room      string `json:"room"`
 	}
-	ids := []string{GetSessionID(s)}
-
-	err := json.Unmarshal(msg, &params)
+	var (
+		ids = []string{GetSessionID(s)}
+		err = json.Unmarshal(msg, &params)
+	)
 
 	if err != nil {
 		constant.ResponeWithData(m, s, constant.ERROR_PARAMS, ids)
@@ -107,16 +107,53 @@ func InRoom(m *melody.Melody, s *melody.Session, msg []byte) {
 	}
 
 	if !redis.RoomCheck(params.Room) {
-		constant.ResponeWithData(m, s, constant.ERROR_EXIST_ROOM, nil)
+		constant.ResponeWithData(m, s, constant.ERROR_EXIST_ROOM, ids)
 		return
 	}
 
 	if err := redis.ChangePlayerPlace(ids[0], params.Room); err != nil {
-		constant.ResponeWithData(m, s, constant.ERROR_IN_ROOM, nil)
+		constant.ResponeWithData(m, s, constant.ERROR_IN_ROOM, ids)
 		return
 	}
-	constant.ResponeWithData(m, s, constant.SUCCESS, nil)
-	return
+
+	enemy, ownerCheck, err := redis.GetEnemy(ids[0], params.Room)
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR_GET_ROOM_ENEMY, ids)
+		return
+	}
+
+	var (
+		enemyID            string
+		enemyBroadcastInfo postgresql.PlayerInfo
+	)
+	if !ownerCheck {
+		_, err = redis.SetPlayerInfoString(ids[0], constant.PLAYERISROOMOWNER, constant.OWNERSTATETRUE)
+		if err != nil {
+			constant.ResponeWithData(m, s, constant.ERROR_SET_ROOM_OWNER, ids)
+			return
+		}
+	} else {
+		enemyID = enemy.PlayerID
+		enemyBroadcastInfo, _, err = redis.GetEnemy(enemyID, params.Room)
+		if err != nil {
+			constant.ResponeWithData(m, s, constant.ERROR_GET_ROOM_ENEMY, ids)
+			return
+		}
+	}
+
+	err = BroadcastRoomStateList(m, s)
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR_BROADCASE_PLAYERS, ids)
+		return
+	}
+	if !ownerCheck {
+		constant.ResponeWithData(m, s, constant.SUCCESS, ids, nil)
+		return
+	} else {
+		constant.ResponeWithData(m, s, constant.GET_ENEMY, []string{enemyID}, enemyBroadcastInfo)
+		constant.ResponeWithData(m, s, constant.SUCCESS, ids, enemy)
+		return
+	}
 }
 
 func OutRoom(m *melody.Melody, s *melody.Session, msg []byte) {
@@ -134,15 +171,22 @@ func OutRoom(m *melody.Melody, s *melody.Session, msg []byte) {
 	}
 
 	if !redis.RoomCheck(params.Room) {
-		constant.ResponeWithData(m, s,constant.ERROR_EXIST_ROOM, nil)
+		constant.ResponeWithData(m, s, constant.ERROR_EXIST_ROOM, ids)
 		return
 	}
 
-if err := redis.ChangePlayerPlace(ids[0], params.Room); err != nil {
-		constant.ResponeWithData(m, s, constant.ERROR_OUT_ROOM, nil)
+	if err := redis.ChangePlayerPlace(ids[0], params.Room); err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR_IN_ROOM, ids)
 		return
 	}
-	constant.ResponeWithData(m, s, constant.SUCCESS, nil)
+
+	err = BroadcastRoomStateList(m, s)
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR_BROADCASE_PLAYERS, ids)
+		return
+	}
+
+	constant.ResponeWithData(m, s, constant.SUCCESS, ids)
 	return
 }
 

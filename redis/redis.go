@@ -3,6 +3,7 @@ package redis
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"tetris/constant"
 	"tetris/postgresql"
 
@@ -46,7 +47,7 @@ func Initialize() {
 	}
 
 	for _, room := range roomList {
-		redisClient.SAdd(ctx, room, room)
+		redisClient.SAdd(ctx, room, "waiting")
 	}
 
 }
@@ -155,10 +156,115 @@ func RoomCheck(nextRoom string) bool {
 	return false
 }
 
+// 取得房間玩家列表
 func GetRoomPlayers(room string) ([]string, error) {
 	ids, err := redisClient.SMembers(ctx, room).Result()
 	if err != nil {
 		return []string{}, err
 	}
 	return ids, nil
+}
+
+// 取得對手資料
+func GetEnemy(id, room string) (postgresql.PlayerInfo, bool, error) {
+	var enemyID string
+	var info postgresql.PlayerInfo
+	players, err := GetRoomPlayers(room)
+	if err != nil {
+		return info, false, err
+	}
+
+	for _, playerID := range players {
+		if playerID != id && playerID != constant.ROOMSTATEPLAYING && playerID != constant.ROOMSTATEWAITING{
+			enemyID = playerID
+		}
+	}
+	log.Println("enemy:", enemyID)
+	if enemyID == "" {
+		return info, false, nil
+	}
+
+	icon, err := GetPlayerInfo(id, constant.PLAYERICON)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+
+	playerID, err := GetPlayerInfo(id, constant.PLAYERID)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+
+	nickName, err := GetPlayerInfo(id, constant.PLAYERNICKNAME)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+
+	win, err := GetPlayerInfo(id, constant.PLAYERWIN)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+
+	info.PlayerID = playerID
+	info.NickName = nickName
+	info.Win, err = strconv.Atoi(win)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+	info.Icon, err = strconv.Atoi(icon)
+	if err != nil {
+		return postgresql.PlayerInfo{}, false, err
+	}
+
+	return info, true, nil
+}
+
+// 取得玩家單項資料
+func GetPlayerInfo(id string, infoType int) (string, error) {
+	info, err := redisClient.LIndex(ctx, id, int64(infoType)).Result()
+	if err != nil {
+		return "", err
+	}
+	return info, nil
+}
+
+// 取得房間資料+狀態
+func GetRoomState(room string) (postgresql.RoomState, error) {
+	var roomState postgresql.RoomState
+
+	exist, err := redisClient.SIsMember(ctx, room, constant.ROOMSTATEPLAYING).Result()
+	if err != nil {
+		return postgresql.RoomState{}, err
+	}
+
+	if exist {
+		roomState.IsPlaying = true
+	} else {
+		roomState.IsPlaying = false
+	}
+
+	playerList, err := GetRoomPlayers(room)
+	if err != nil {
+		return postgresql.RoomState{}, err
+	}
+
+	roomState.PlayerList = playerList
+
+	return roomState, nil
+}
+
+func GetAllRoomState() ([]postgresql.RoomState, error) {
+	var allRoomList []postgresql.RoomState
+
+	for _, room := range roomList {
+		if room != constant.PLACEHALL {
+			roomState, err := GetRoomState(room)
+			if err != nil {
+				return []postgresql.RoomState{}, err
+			}
+
+			allRoomList = append(allRoomList, roomState)
+		}
+	}
+
+	return allRoomList, nil
 }

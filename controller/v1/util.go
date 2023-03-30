@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"log"
+	"encoding/json"
 	"tetris/constant"
 	"tetris/redis"
 
@@ -14,7 +14,6 @@ func BroadcastToPlayers(m *melody.Melody, msg []byte, room string) error {
 		return err
 	}
 
-	log.Println(room, "members: ", p)
 	for _, player := range p {
 		BroadcastToPlayer(m, msg, player)
 	}
@@ -26,4 +25,22 @@ func BroadcastToPlayer(m *melody.Melody, msg []byte, id string) {
 		compareID, _ := s.Get(constant.SESSIONPREFIX)
 		return compareID == id
 	})
+}
+
+func BroadcastRoomStateList(m *melody.Melody, s *melody.Session) error {
+	roomStateList, err := redis.GetAllRoomState()
+	if err != nil {
+		return err
+	}
+
+	rsJsonMsg, err := json.Marshal(roomStateList)
+	if err != nil {
+		return err
+	}
+
+	err = BroadcastToPlayers(m, rsJsonMsg, constant.PLACEHALL)
+	if err != nil {
+		return err
+	}
+	return nil
 }

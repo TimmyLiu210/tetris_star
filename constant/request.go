@@ -23,8 +23,15 @@ const (
 {
     "event_type": 101,
     "data": {
-    "account": "a1094137",
-    "password": "553525"
+    "account": "123456",
+    "password": "123456"
     }
 }
+
+
+{
+	"event_type": 103,
+	"Room": "room-1"
+}
+
 */

@@ -14,16 +14,6 @@ type Message struct {
 	Data      interface{} `json:"data"`
 }
 
-/*
-{
-	"eventType": 100,
-	"Data": {
-		"account": a1094137,
-		"password": 553525
-	}
-}
-*/
-
 func InitSession(s *melody.Session) string {
 	id := uuid.New().String()
 	s.Set(constant.SESSIONPREFIX, id)

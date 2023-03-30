@@ -56,3 +56,43 @@ const (
 	ROOMSTATEPLAYING string = "playing"
 	ROOMSTATEWAITING string = "waiting"
 )
+
+// tetris const
+const (
+	TETRISWIDTH  = 10
+	TETRISLENGTH = 60
+	TETRISTYPELENGTH = 7
+	TETRISCHANNELBUFFER = 6
+
+	INITDEX = 1
+	INITTETRIS = 6
+
+	PLAYERCOUNT = 2
+
+	TETRIS_X = 4
+	TETRIS_Y = 4
+	TETRIS_ROTATE_TYPE = 4
+	TETRIS_COUNT = 4
+)
+// commond type
+const (
+	ROTATE = iota + 1
+	FALL
+	STORE
+	MOVE
+)
+// tetris index
+const (
+	TETRIS_I = iota
+	TETRIS_J
+	TETRIS_L
+	TETRIS_O
+	TETRIS_S
+	TETRIS_T
+	TETRIS_Z
+)
+
+const (
+	PLAYER_A = iota
+	PLAYER_B
+)

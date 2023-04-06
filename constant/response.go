@@ -37,6 +37,7 @@ const (
 	ERROR_DATA_JSON_MARSHAL
 
 	ERROR_BROADCASE_PLAYERS
+
 )
 
 var msgFlags = map[int]string{
@@ -71,6 +72,7 @@ var msgFlags = map[int]string{
 	ERROR_BROADCASE_PLAYERS: "broadcast to players failed!",
 
 	ERROR_SET_ROOM_OWNER: "set room owner failed!",
+
 }
 
 type ReturnMessage struct {

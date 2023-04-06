@@ -73,6 +73,8 @@ const (
 	TETRIS_Y = 4
 	TETRIS_ROTATE_TYPE = 4
 	TETRIS_COUNT = 4
+
+	TETRIS_COORDINATE_COUNT = 2
 )
 // commond type
 const (
@@ -95,4 +97,16 @@ const (
 const (
 	PLAYER_A = iota
 	PLAYER_B
+)
+
+const (
+	TETRIS_FALL_SPEED = 1
+	
+	TETRIS_ROTATE_INITIAL_TYPE = 0
+
+	TETRIS_COORDINATE_X = 0
+	TETRIS_COORDINATE_Y = 1
+
+	PLAYER_ONE = 0
+	PLAYER_TWO = 1
 )

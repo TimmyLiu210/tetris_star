@@ -81,13 +81,36 @@ func SignIn(m *melody.Melody, s *melody.Session, msg []byte) {
 
 	redis.InitializePlayerInfo(ids[0], *playerInfo)
 
-
 	constant.ResponeWithData(m, s, constant.SUCCESS, ids)
 	return
 }
 
 // 登出
 func SignOut(m *melody.Melody, s *melody.Session, msg []byte) {
+	var params struct {
+		EventType  int                   `json:"event_type"`
+		PlayerInfo postgresql.PlayerInfo `json:"data"`
+	}
+	ids := []string{GetSessionID(s)}
+	err := json.Unmarshal(msg, &params)
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR_PARAMS, ids)
+		return
+	}
+
+	_, err = redis.LeavePlace(ids[0])
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR, ids)
+		return
+	}
+
+	_, err = redis.DelPlayerInfo(ids[0])
+	if err != nil {
+		constant.ResponeWithData(m, s, constant.ERROR, ids)
+		return
+	}
+	
+	constant.ResponeWithData(m, s, constant.SUCCESS, ids)
 	return
 }
 

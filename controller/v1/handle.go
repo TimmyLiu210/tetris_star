@@ -53,6 +53,8 @@ func CheckCommond(m *melody.Melody, s *melody.Session, msg []byte) {
 		OutRoom(m, s, msg)
 	case constant.START_GAME:
 		StartGame(m, s, msg)
+	case constant.GAME_COMMOND:
+		GetCommond(m, s, msg)
 	default:
 		constant.ResponeWithData(m, s, constant.ERROR_GET_MESSAGE, ids, nil)
 	}

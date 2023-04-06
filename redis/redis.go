@@ -20,7 +20,7 @@ const (
 	PLAYER_SIGN_IN = iota + 601
 )
 
-var roomList = []string{"hall"}
+var RoomList = []string{"hall"}
 
 var msgFlags = []string{
 	PLAYER_SIGN_IN: "Player is in the hall",
@@ -43,10 +43,10 @@ func Initialize() {
 	// set redis hall
 
 	for i := 1; i <= constant.MAXROOMCOUNT; i++ {
-		roomList = append(roomList, constant.ROOMPREFIX+fmt.Sprint(i))
+		RoomList = append(RoomList, constant.ROOMPREFIX+fmt.Sprint(i))
 	}
 
-	for _, room := range roomList {
+	for _, room := range RoomList {
 		redisClient.SAdd(ctx, room, "waiting")
 	}
 
@@ -148,7 +148,7 @@ func LeavePlace(id string) (int64, error) {
 }
 
 func RoomCheck(nextRoom string) bool {
-	for _, room := range roomList {
+	for _, room := range RoomList {
 		if room == nextRoom {
 			return true
 		}
@@ -255,7 +255,7 @@ func GetRoomState(room string) (postgresql.RoomState, error) {
 func GetAllRoomState() ([]postgresql.RoomState, error) {
 	var allRoomList []postgresql.RoomState
 
-	for _, room := range roomList {
+	for _, room := range RoomList {
 		if room != constant.PLACEHALL {
 			roomState, err := GetRoomState(room)
 			if err != nil {

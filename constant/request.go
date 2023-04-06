@@ -10,6 +10,8 @@ const (
 
 	START_GAME
 	END_GAME
+
+	GAME_COMMOND
 )
 
 // broadcast event type

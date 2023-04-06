@@ -37,3 +37,8 @@ const (
 }
 
 */
+
+const (
+	REQUEST_EMPTY_TYPE_STRING = ""
+	REQUEST_EMPTY_TYPE_INT = 0
+)

@@ -23,6 +23,8 @@ type TetrisSite struct {
 
 	X [constant.TETRIS_COUNT]int
 	Y [constant.TETRIS_COUNT]int
+
+	Coordinate [constant.TETRIS_COORDINATE_COUNT][constant.TETRIS_COUNT]int
 }
 
 var (
@@ -43,6 +45,8 @@ var (
 	playerList [][]string
 
 	tetrisIndex [][][]int
+
+	tetrisStore [][]TetrisSite
 
 	tetrisList = []string{"I", "J", "L", "O", "S", "T", "Z"}
 
@@ -218,11 +222,21 @@ func EndGame() error {
 	return nil
 }
 
-func TetrisFall(roomIndex int) error {
+// 缺少失敗檢查
+func TetrisFall(roomIndex int, id string) error {
+	player, err := GetPlayerIndex(roomIndex, id)
+	if err != nil {
+		return err
+	}
+
+	for index := range tetrisNow[roomIndex][player].Coordinate[constant.TETRIS_COORDINATE_Y] {
+		tetrisNow[roomIndex][player].Coordinate[constant.TETRIS_COORDINATE_Y][index] -= constant.TETRIS_MOVE_SPEED
+	}
 
 	return nil
 }
 
+// 缺少失敗檢查
 func TetrisRotate(roomIndex int, id string) error {
 	player, err := GetPlayerIndex(roomIndex, id)
 	if err != nil {
@@ -235,21 +249,12 @@ func TetrisRotate(roomIndex int, id string) error {
 	}
 
 	for coordinate, rotateRule := range tetrisRule[tetris][tetrisNow[roomIndex][player].TetrisRotateType] {
-		switch coordinate {
-		case constant.TETRIS_COORDINATE_X:
-			for index, rule := range rotateRule {
-				tetrisNow[roomIndex][player].X[index] += rule
-			}
-		case constant.TETRIS_COORDINATE_Y:
-			{
-				for index, rule := range rotateRule {
-					tetrisNow[roomIndex][player].Y[index] += rule
-				}
-			}
+		for index, rule := range rotateRule {
+			tetrisNow[roomIndex][player].Coordinate[coordinate][index] += rule
 		}
 	}
 
-	tetrisNow[roomIndex][player].TetrisRotateType = tetrisNow[roomIndex][player].TetrisRotateType % 4
+	tetrisNow[roomIndex][player].TetrisRotateType = (tetrisNow[roomIndex][player].TetrisRotateType + 1) % 4
 
 	return nil
 }
@@ -273,8 +278,7 @@ func CreateNewTetris(roomIndex int, id string) error {
 		TetrisName:       tetrisList[newTetrixIndex] + tetrisN,
 		TetrisType:       tetrisList[newTetrixIndex],
 		TetrisRotateType: constant.TETRIS_ROTATE_INITIAL_TYPE,
-		X:                tetrisStartSite[newTetrixIndex][constant.TETRIS_COORDINATE_X],
-		Y:                tetrisStartSite[newTetrixIndex][constant.TETRIS_COORDINATE_Y],
+		Coordinate:       tetrisStartSite[newTetrixIndex],
 	}
 
 	return nil
@@ -286,7 +290,7 @@ func GetPlayerIndex(roomIndex int, id string) (int, error) {
 			return playerIndex, nil
 		}
 	}
-	return 0, errors.New("get player index failed!")
+	return constant.RESPONSE_ERROR_TYPE_INT, errors.New("get player index failed!")
 }
 
 func getTetrisIndex(name string) (int, error) {
@@ -295,5 +299,77 @@ func getTetrisIndex(name string) (int, error) {
 			return tetrisIndex, nil
 		}
 	}
-	return 0, errors.New("get tetris name index failed!")
+	return constant.RESPONSE_ERROR_TYPE_INT, errors.New("get tetris name index failed!")
+}
+
+// 碰撞檢查
+func CrashCheck(room string, id string, crashType int) (bool, error) {
+	switch crashType {
+	case constant.TETRIS_CRASH_TYPE_ROTATE:
+
+	case constant.TETRIS_CRASH_TYPE_FALL:
+
+	default:
+		return false, errors.New("get crash check failed!")
+	}
+	return true, nil
+}
+
+// 暫存方塊
+func TetrisStore(room string, id string) error {
+	roomIndex, playerIndex, _, err := GetIndex(room, id, "")
+	if err != nil {
+		return err
+	}
+
+	tetrisStore[roomIndex][playerIndex] = tetrisNow[roomIndex][playerIndex]
+	tetrisStore[roomIndex][playerIndex].TetrisRotateType = constant.TETRIS_ROTATE_INITIAL_TYPE
+	return nil
+}
+
+// 找到房名和ID對應的index
+func GetIndex(room, id, tetris string) (int, int, int, error) {
+	var (
+		roomIndex   int
+		playerIndex int
+		tetrisIndex int
+	)
+
+	if tetris == constant.REQUEST_EMPTY_TYPE_STRING && room == constant.REQUEST_EMPTY_TYPE_STRING && id == constant.REQUEST_EMPTY_TYPE_STRING {
+		return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get index failed!")
+	}
+
+	if tetris != constant.REQUEST_EMPTY_TYPE_STRING {
+		for i, tetrisName := range tetrisList {
+			if tetris == tetrisName {
+				tetrisIndex = i
+			}
+		}
+		if tetrisIndex == constant.RESPONSE_ERROR_TYPE_INT {
+			return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get tetris index failed!")
+
+		}
+		return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, tetrisIndex, nil
+	}
+
+	if room != constant.REQUEST_EMPTY_TYPE_STRING || id != constant.REQUEST_EMPTY_TYPE_STRING {
+		for i, roomName := range redis.RoomList {
+			if roomName == room {
+				roomIndex = i
+			}
+		}
+		if roomIndex == constant.RESPONSE_ERROR_TYPE_INT {
+			return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get room index failed!")
+		}
+		for i, playerID := range playerList[roomIndex] {
+			if playerID == id {
+				playerIndex = i
+			}
+		}
+		if playerIndex == constant.RESPONSE_ERROR_TYPE_INT {
+			return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get player index failed!")
+		}
+	}
+
+	return roomIndex, playerIndex, tetrisIndex, nil
 }

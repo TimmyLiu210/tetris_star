@@ -218,7 +218,8 @@ func StartGame() error {
 	return nil
 }
 
-func EndGame() error {
+func EndGame(room, winner string) error {
+
 	return nil
 }
 
@@ -304,11 +305,37 @@ func getTetrisIndex(name string) (int, error) {
 
 // 碰撞檢查
 func CrashCheck(room string, id string, crashType int) (bool, error) {
+	roomIndex, playerIndex, tetrisIndex, err := GetIndex(room, id, "")
+	if err != nil{
+		return false, err
+	}
+
+	var monitorTetris TetrisSite = tetrisNow[roomIndex][playerIndex]
+
 	switch crashType {
 	case constant.TETRIS_CRASH_TYPE_ROTATE:
-
+		for coordinate, rotateRule := range tetrisRule[tetrisIndex][tetrisNow[roomIndex][playerIndex].TetrisRotateType] {
+			for index, rule := range rotateRule {
+				monitorTetris.Coordinate[coordinate][index] += rule
+			}
+		}
+		
+		for i := 0 ; i < constant.TETRIS_COUNT; i++{
+			if tetrisMap[roomIndex][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_X][i]][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY{
+				return false, nil
+			}
+		}
 	case constant.TETRIS_CRASH_TYPE_FALL:
+		for index := range monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y]{
+			monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][index] -= constant.TETRIS_FALL_SPEED
+		}
 
+		for i := range monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y]{
+			if tetrisMap[roomIndex][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_X][i]][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY{
+				return false, nil
+			}
+		}
+		
 	default:
 		return false, errors.New("get crash check failed!")
 	}

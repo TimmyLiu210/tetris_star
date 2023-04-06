@@ -212,7 +212,9 @@ func OutRoom(m *melody.Melody, s *melody.Session, msg []byte) {
 	constant.ResponeWithData(m, s, constant.SUCCESS, ids)
 	return
 }
-
+// Summary
+// Set Room state, broadcast to hall, broadcast the count down, set the playerlist, initial the game
 func StartGame(m *melody.Melody, s *melody.Session, msg []byte) {
 	return
 }
+

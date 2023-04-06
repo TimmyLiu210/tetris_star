@@ -175,7 +175,7 @@ func GetEnemy(id, room string) (postgresql.PlayerInfo, bool, error) {
 	}
 
 	for _, playerID := range players {
-		if playerID != id && playerID != constant.ROOMSTATEPLAYING && playerID != constant.ROOMSTATEWAITING{
+		if playerID != id && playerID != constant.ROOMSTATEPLAYING && playerID != constant.ROOMSTATEWAITING {
 			enemyID = playerID
 		}
 	}
@@ -267,4 +267,12 @@ func GetAllRoomState() ([]postgresql.RoomState, error) {
 	}
 
 	return allRoomList, nil
+}
+
+func SetRoomPlayerState(room string, state string) {
+
+}
+
+func UpdatePlayerWin(id string) {
+
 }

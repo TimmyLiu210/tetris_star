@@ -18,6 +18,7 @@ const (
 // variables limit
 const (
 	MAXROOMCOUNT int = 5 //最大房間數量
+	MINROOMCOUNT int = 1
 
 	MAXACCOUNT  int = 8 //最大帳號字數
 	MAXPASSWORD int = 6 //最大密碼字數
@@ -102,6 +103,8 @@ const (
 const (
 	TETRIS_FALL_SPEED = 1
 	TETRIS_MOVE_SPEED = 1
+
+	TETRIS_FALL_WAITING = 1
 
 	TETRIS_MAP_EMPTY = "empty"
 	

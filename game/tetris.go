@@ -2,12 +2,12 @@ package game
 
 import (
 	"errors"
+	"log"
 	"math/rand"
 	"strconv"
 	"tetris/constant"
 	"tetris/redis"
-
-	"gopkg.in/olahol/melody.v1"
+	"time"
 )
 
 type TetrisCommond struct {
@@ -21,39 +21,39 @@ type TetrisSite struct {
 	TetrisType       string
 	TetrisRotateType int
 
-	X [constant.TETRIS_COUNT]int
-	Y [constant.TETRIS_COUNT]int
-
 	Coordinate [constant.TETRIS_COORDINATE_COUNT][constant.TETRIS_COUNT]int
 }
 
-var (
-	gameC [constant.MAXROOMCOUNT]chan int
-	// tetris的地圖
-	tetrisMap [][][]string
+type Server struct {
+	Start chan bool
+	End   chan bool
 
+	playerCommond chan TetrisCommond
+
+	tetrisMap [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string
+
+	tetrisNow [constant.PLAYERCOUNT]TetrisSite
+
+	tetrisWaiting [constant.PLAYERCOUNT][constant.TETRIS_WAITING_COUNT]TetrisSite
+
+	tetrisStore [constant.PLAYERCOUNT][constant.TETRISSTORECOUNT]TetrisSite
+
+	playerList [constant.PLAYERCOUNT]string
+
+	playerMap map[string]int
+
+	tetrisIndexList [constant.PLAYERCOUNT][constant.TETRISTYPELENGTH]int
+}
+
+var (
 	// tetris 運轉規則
 	tetrisRule [constant.TETRISTYPELENGTH][constant.TETRIS_ROTATE_TYPE][constant.TETRIS_X][constant.TETRIS_Y]int
 
-	// 接收玩家指令的chan
-	playerACh []chan int
-	playerBCh []chan int
-
-	//
-	gameStartC chan string
-	gameEndC   chan string
-
-	// 正在移動的tetris 位置
-	tetrisNow [][]TetrisSite
-
-	// 遊戲玩家列表
-	playerList [][]string
-
-	tetrisIndex [][][]int
-
-	tetrisStore [][]TetrisSite
-
 	tetrisList = []string{"I", "J", "L", "O", "S", "T", "Z"}
+
+	tetrisTypeMap = make(map[string]int)
+
+	tetrisServer = make(map[string]*Server)
 
 	// 每個tetris 初始位置  [tetrisIndex][X,Y][中心點順時針順序]
 	tetrisStartSite [constant.TETRISTYPELENGTH][constant.TETRIS_COORDINATE_COUNT][constant.TETRIS_COUNT]int
@@ -63,27 +63,131 @@ var (
 )
 
 func Initialize() {
-	roomLen := len(redis.RoomList)
-	playerACh = make([]chan int, 0)
-	playerBCh = make([]chan int, 0)
-
 	InitializeTetrisRule(&tetrisRule)
 
-	for i := 0; i < roomLen; i++ {
-		playerACh = append(playerACh, make(chan int))
-		playerBCh = append(playerBCh, make(chan int))
+	for _, roomName := range redis.RoomList {
+		newServer := InitialServer()
 
-		tetrisMap = append(tetrisMap, InitializeMap())
+		tetrisServer[roomName] = &newServer
+
+		go runServer(roomName, tetrisServer[roomName])
 	}
-	/*
-		for i := range gameC{
-			GameServer(gameC[i])
-		}*/
 
+}
+
+func InitialServer() Server {
+	var newServer = Server{
+		Start: make(chan bool),
+		End:   make(chan bool),
+
+		tetrisMap: [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string{},
+
+		playerCommond: make(chan TetrisCommond),
+
+		playerMap: make(map[string]int),
+	}
+
+	ResetServer(&newServer)
+
+	return newServer
+}
+
+func StartGame(room string) {
+	tetrisServer[room].Start <- true
+}
+
+func EndGame(room string) {
+	tetrisServer[room].End <- true
+}
+
+func ResetServer(tetrisS *Server) {
+	for i := range tetrisS.tetrisMap {
+		for j := range tetrisS.tetrisMap[i] {
+			for k := range tetrisS.tetrisMap[i][j] {
+				tetrisS.tetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
+				tetrisS.tetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
+			}
+		}
+	}
+
+	for i := range tetrisS.tetrisIndexList {
+		for j := range tetrisS.tetrisIndexList[i] {
+			tetrisS.tetrisIndexList[i][j] = 0
+		}
+	}
+
+	for i := range tetrisS.tetrisNow {
+		tetrisS.tetrisNow[i] = CreateNewTetris(&tetrisS.tetrisIndexList[i])
+	}
+
+	for i := range tetrisS.tetrisWaiting {
+		for j := range tetrisS.tetrisWaiting[i] {
+			tetrisS.tetrisWaiting[i][j] = CreateNewTetris(&tetrisS.tetrisIndexList[i])
+		}
+	}
+
+	for i := range tetrisS.playerList {
+		tetrisS.playerMap[tetrisS.playerList[i]] = i
+	}
+	log.Println("[Server Msg] Reset Server Success...")
+	return
+}
+
+func runServer(roomName string, tetrisS *Server) {
+	log.Println("[Server Msg]", roomName, "Server is runing...")
+	var endMoving = make(chan bool)
+	for {
+		select {
+		case <-tetrisS.Start:
+			// count down
+
+			// initial the stage
+			log.Printf("[Server Msg] Start reset Server[%s]", roomName)
+			ResetServer(tetrisS)
+			go func() {
+				for {
+					select {
+					case <-endMoving:
+						return
+					default:
+						// tetris moving + waiting
+						TetrisMoving(&tetrisS.tetrisMap[constant.PLAYER_A], &tetrisS.tetrisNow[constant.PLAYER_A])
+						TetrisMoving(&tetrisS.tetrisMap[constant.PLAYER_B], &tetrisS.tetrisNow[constant.PLAYER_B])
+						time.Sleep(constant.TETRIS_FALL_SPEED * time.Second)
+					}
+				}
+
+			}()
+			go func() {
+				for {
+					select {
+					// player commond
+					case c := <-tetrisS.playerCommond:
+						log.Println(c)
+					case <-tetrisS.End:
+						// game end
+						endMoving <- true
+
+						// broadcast the end and set the new win for winner
+
+						return
+					default:
+					}
+				}
+			}()
+
+		default:
+			time.Sleep(100 * time.Second)
+		}
+	}
 }
 
 // initialize the tetris rotate rule
 func InitializeTetrisRule(tetrisRotate *[constant.TETRISTYPELENGTH][constant.TETRIS_ROTATE_TYPE][constant.TETRIS_X][constant.TETRIS_Y]int) {
+
+	for index := range tetrisList {
+		tetrisTypeMap[tetrisList[index]] = index
+	}
 
 	for tetrisType := 0; tetrisType < len(tetrisList); tetrisType++ {
 		switch tetrisType {
@@ -197,112 +301,17 @@ func InitializeTetrisRule(tetrisRotate *[constant.TETRISTYPELENGTH][constant.TET
 	return
 }
 
-func InitializeMap() [][]string {
-	var emptyMap [][]string
-
-	for i := 0; i < constant.TETRISWIDTH; i++ {
-		mapW := []string{}
-		for j := 0; j < constant.TETRISLENGTH; j++ {
-			mapW = append(mapW, "empty")
+func TetrisMoving(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
+	crash, err := CrashCheck(*tetrisMap, *t, constant.TETRIS_CRASH_TYPE_FALL)
+	if err != nil {
+		return false, err
+	}
+	if crash {
+		for i := range t.Coordinate[constant.TETRIS_COORDINATE_Y] {
+			tetrisMap[constant.TETRIS_COORDINATE_Y][i] = constant.TETRIS_MAP_EMPTY
+			t.Coordinate[constant.TETRIS_COORDINATE_Y][i] -= constant.TETRIS_MOVE_SPEED
+			tetrisMap[constant.TETRIS_COORDINATE_Y][i] = t.TetrisName
 		}
-		emptyMap = append(emptyMap, mapW)
-	}
-	return emptyMap
-}
-
-/*
-func GameServer(gameChannel chan int) {
-	for {
-		gameStart := <-gameStartC
-		gameEnd := <-gameEndC
-		go func() {
-			for {
-				log.Println(gameStart, "start game")
-				TetrisMoving(gameStart)
-				time.Sleep(constant.TETRIS_FALL_WAITING * time.Second)
-				if gameEnd == gameStart {
-					break
-				}
-			}
-		}()
-	}
-}*/
-
-func Commond(m *melody.Melody, s *melody.Session, msg []byte) error {
-	return nil
-}
-
-func StartGame(room string) error {
-	gameStartC <- room
-	return nil
-}
-
-func EndGame(room, winner string) error {
-	gameEndC <- room
-	redis.SetRoomPlayerState(room, constant.ROOMSTATEWAITING)
-	redis.UpdatePlayerWin(winner)
-	return nil
-}
-
-func RestartGame(room string) error {
-	gameStartC <- room
-	return nil
-}
-
-func TetrisMoving(room string) error {
-	roomIndex, _, _, err := GetIndex(room, constant.REQUEST_EMPTY_TYPE_STRING)
-	if err != nil {
-		return err
-	}
-
-	for _, id := range playerList[roomIndex] {
-		TetrisFall(room, id)
-	}
-	return nil
-}
-
-// [Summary] Set tetris fall
-func TetrisFall(room string, id string) (bool, error) {
-
-	roomIndex, idIndex, tetrisIndex, err := GetIndex(room, id)
-	if err != nil {
-		return false, err
-	}
-
-	crashCheck, err := CrashCheck(roomIndex, idIndex, tetrisIndex, constant.TETRIS_CRASH_TYPE_FALL)
-	if err != nil {
-		return false, err
-	}
-	if crashCheck {
-		for index := range tetrisNow[roomIndex][idIndex].Coordinate[constant.TETRIS_COORDINATE_Y] {
-			tetrisNow[roomIndex][idIndex].Coordinate[constant.TETRIS_COORDINATE_Y][index] -= constant.TETRIS_MOVE_SPEED
-		}
-	} else {
-		return false, err
-	}
-
-	return true, nil
-}
-
-func TetrisRotate(room string, id string) (bool, error) {
-
-	roomIndex, idIndex, tetrisIndex, err := GetIndex(room, id)
-	if err != nil {
-		return false, err
-	}
-
-	crashCheck, err := CrashCheck(roomIndex, idIndex, tetrisIndex, constant.TETRIS_CRASH_TYPE_FALL)
-	if err != nil {
-		return false, err
-	}
-	if crashCheck {
-		for coordinate, rotateRule := range tetrisRule[tetrisIndex][tetrisNow[roomIndex][idIndex].TetrisRotateType] {
-			for index, rule := range rotateRule {
-				tetrisNow[roomIndex][idIndex].Coordinate[coordinate][index] += rule
-			}
-		}
-
-		tetrisNow[roomIndex][idIndex].TetrisRotateType = (tetrisNow[roomIndex][idIndex].TetrisRotateType + 1) % 4
 	} else {
 		return false, nil
 	}
@@ -310,54 +319,69 @@ func TetrisRotate(room string, id string) (bool, error) {
 	return true, nil
 }
 
-func CreateNewTetris(room string, id string) error {
+func TetrisRotate(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
+	crash, err := CrashCheck(*tetrisMap, *t, constant.TETRIS_CRASH_TYPE_ROTATE)
+	if err != nil {
+		return false, err
+	}
+	if crash {
+		for coordinate, rotateRule := range tetrisRule[tetrisTypeMap[t.TetrisType]][t.TetrisRotateType] {
+			for index, rule := range rotateRule {
+				t.Coordinate[coordinate][index] += rule
+			}
+		}
+		t.TetrisRotateType = (t.TetrisRotateType + 1) % 4
+
+	} else {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func CreateNewTetris(tetrisIndexList *[constant.TETRISTYPELENGTH]int) TetrisSite {
 	var (
-		tetrisN        string
+		tetrisDex      string
 		newTetrixIndex = rand.Intn(constant.TETRISTYPELENGTH - 1)
 	)
 
-	roomIndex, player, _, err := GetIndex(room, id)
-	if err != nil {
-		return err
-	}
+	tetrisIndexList[newTetrixIndex] += 1
 
-	tetrisIndex[roomIndex][player][newTetrixIndex] += 1
-	tetrisN = strconv.Itoa(tetrisIndex[roomIndex][player][newTetrixIndex])
+	tetrisDex = strconv.Itoa(tetrisIndexList[newTetrixIndex])
 
-	tetrisNow[roomIndex][player] = TetrisSite{
-		TetrisName:       tetrisList[newTetrixIndex] + tetrisN,
+	newTetris := TetrisSite{
+		TetrisName:       tetrisList[newTetrixIndex] + tetrisDex,
 		TetrisType:       tetrisList[newTetrixIndex],
 		TetrisRotateType: constant.TETRIS_ROTATE_INITIAL_TYPE,
 		Coordinate:       tetrisStartSite[newTetrixIndex],
 	}
 
-	return nil
+	return newTetris
 }
 
 // 碰撞檢查
-func CrashCheck(roomIndex int, playerIndex int, tetrisIndex int, crashType int) (bool, error) {
-	var monitorTetris TetrisSite = tetrisNow[roomIndex][playerIndex]
+func CrashCheck(tetrisM [constant.TETRISLENGTH][constant.TETRISWIDTH]string, t TetrisSite, crashType int) (bool, error) {
 
 	switch crashType {
 	case constant.TETRIS_CRASH_TYPE_ROTATE:
-		for coordinate, rotateRule := range tetrisRule[tetrisIndex][tetrisNow[roomIndex][playerIndex].TetrisRotateType] {
+		for coordinate, rotateRule := range tetrisRule[tetrisTypeMap[t.TetrisType]][t.TetrisRotateType] {
 			for index, rule := range rotateRule {
-				monitorTetris.Coordinate[coordinate][index] += rule
+				t.Coordinate[coordinate][index] += rule
 			}
 		}
 
 		for i := 0; i < constant.TETRIS_COUNT; i++ {
-			if tetrisMap[roomIndex][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_X][i]][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY {
+			if tetrisM[t.Coordinate[constant.TETRIS_COORDINATE_X][i]][t.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY {
 				return false, nil
 			}
 		}
 	case constant.TETRIS_CRASH_TYPE_FALL:
-		for index := range monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y] {
-			monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][index] -= constant.TETRIS_FALL_SPEED
+		for index := range t.Coordinate[constant.TETRIS_COORDINATE_Y] {
+			t.Coordinate[constant.TETRIS_COORDINATE_Y][index] -= constant.TETRIS_FALL_SPEED
 		}
 
-		for i := range monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y] {
-			if tetrisMap[roomIndex][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_X][i]][monitorTetris.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY {
+		for i := range t.Coordinate[constant.TETRIS_COORDINATE_Y] {
+			if tetrisM[t.Coordinate[constant.TETRIS_COORDINATE_X][i]][t.Coordinate[constant.TETRIS_COORDINATE_Y][i]] != constant.TETRIS_MAP_EMPTY {
 				return false, nil
 			}
 		}
@@ -369,65 +393,11 @@ func CrashCheck(roomIndex int, playerIndex int, tetrisIndex int, crashType int) 
 }
 
 // 暫存方塊
-func TetrisStore(room string, id string) (bool, error) {
-	roomIndex, playerIndex, _, err := GetIndex(room, id)
-	if err != nil {
-		return false, err
-	}
+func TetrisStore(tS *TetrisSite, t *TetrisSite, tetrisIndexList *[constant.TETRISTYPELENGTH]int) (bool, error) {
+	tS = t
+	tS.TetrisRotateType = constant.TETRIS_ROTATE_INITIAL_TYPE
 
-	tetrisStore[roomIndex][playerIndex] = tetrisNow[roomIndex][playerIndex]
-	tetrisStore[roomIndex][playerIndex].TetrisRotateType = constant.TETRIS_ROTATE_INITIAL_TYPE
-
-	err = CreateNewTetris(room, id)
-	if err != nil {
-		return false, err
-	}
+	*t = CreateNewTetris(tetrisIndexList)
 
 	return true, nil
-}
-
-// 找到房名和ID對應的index
-func GetIndex(room, id string) (int, int, int, error) {
-	var (
-		roomIndex   int
-		playerIndex int
-		tetrisIndex int
-	)
-
-	if room == constant.REQUEST_EMPTY_TYPE_STRING && id == constant.REQUEST_EMPTY_TYPE_STRING {
-		return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get index failed!")
-	}
-
-	if room != constant.REQUEST_EMPTY_TYPE_STRING || id != constant.REQUEST_EMPTY_TYPE_STRING {
-		for i, roomName := range redis.RoomList {
-			if roomName == room {
-				roomIndex = i
-			}
-		}
-		if roomIndex != constant.RESPONSE_ERROR_TYPE_INT {
-			for i, playerID := range playerList[roomIndex] {
-				if playerID == id {
-					playerIndex = i
-				}
-			}
-		}
-	}
-
-	if roomIndex != constant.RESPONSE_ERROR_TYPE_INT && playerIndex != constant.RESPONSE_ERROR_TYPE_INT {
-		tetris := tetrisNow[roomIndex][playerIndex].TetrisType
-		for i, tetrisName := range tetrisList {
-			if tetris == tetrisName {
-				tetrisIndex = i
-			}
-		}
-		if tetrisIndex == constant.RESPONSE_ERROR_TYPE_INT {
-			return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, errors.New("get tetris index failed!")
-		}
-
-		if tetrisIndex == constant.RESPONSE_ERROR_TYPE_INT {
-			return constant.RESPONSE_ERROR_TYPE_INT, constant.RESPONSE_ERROR_TYPE_INT, tetrisIndex, nil
-		}
-	}
-
-	return roomIndex, playerIndex, tetrisIndex, nil
 }

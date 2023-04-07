@@ -52,6 +52,7 @@ const (
 	OWNERSTATETRUE  string = "true"
 	OWNERSTATEFALSE string = "false"
 )
+
 // room state
 const (
 	ROOMSTATEPLAYING string = "playing"
@@ -60,23 +61,24 @@ const (
 
 // tetris const
 const (
-	TETRISWIDTH  = 10
-	TETRISLENGTH = 60
-	TETRISTYPELENGTH = 7
+	TETRISWIDTH         = 10
+	TETRISLENGTH        = 60
+	TETRISTYPELENGTH    = 7
 	TETRISCHANNELBUFFER = 6
 
-	INITDEX = 1
+	INITDEX    = 1
 	INITTETRIS = 6
 
 	PLAYERCOUNT = 2
 
-	TETRIS_X = 4
-	TETRIS_Y = 4
+	TETRIS_X           = 4
+	TETRIS_Y           = 4
 	TETRIS_ROTATE_TYPE = 4
-	TETRIS_COUNT = 4
+	TETRIS_COUNT       = 4
 
 	TETRIS_COORDINATE_COUNT = 2
 )
+
 // commond type
 const (
 	ROTATE = iota + 1
@@ -84,6 +86,7 @@ const (
 	STORE
 	MOVE
 )
+
 // tetris index
 const (
 	TETRIS_I = iota
@@ -107,21 +110,23 @@ const (
 	TETRIS_FALL_WAITING = 1
 
 	TETRIS_MAP_EMPTY = "empty"
-	
+
 	TETRIS_ROTATE_INITIAL_TYPE = 0
-	TETRIS_CRASH_TYPE_ROTATE = 0
-	TETRIS_CRASH_TYPE_FALL = 1
+	TETRIS_CRASH_TYPE_ROTATE   = 0
+	TETRIS_CRASH_TYPE_FALL     = 1
 
 	TETRIS_COORDINATE_X = 0
 	TETRIS_COORDINATE_Y = 1
 
+	TETRISSTORECOUNT = 1
+
+	TETRIS_WAITING_COUNT = 4
+
 	PLAYER_ONE = 0
 	PLAYER_TWO = 1
-
 )
 
 const (
 	RESPONSE_ERROR_TYPE_STRING = ""
-	RESPONSE_ERROR_TYPE_INT = 0
+	RESPONSE_ERROR_TYPE_INT    = 0
 )
-

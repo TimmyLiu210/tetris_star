@@ -10,41 +10,6 @@ import (
 	"time"
 )
 
-type TetrisCommond struct {
-	Player  string
-	Commond int
-}
-
-type TetrisSite struct {
-	TetrisName string
-
-	TetrisType       string
-	TetrisRotateType int
-
-	Coordinate [constant.TETRIS_COORDINATE_COUNT][constant.TETRIS_COUNT]int
-}
-
-type Server struct {
-	Start chan bool
-	End   chan bool
-
-	playerCommond chan TetrisCommond
-
-	tetrisMap [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string
-
-	tetrisNow [constant.PLAYERCOUNT]TetrisSite
-
-	tetrisWaiting [constant.PLAYERCOUNT][constant.TETRIS_WAITING_COUNT]TetrisSite
-
-	tetrisStore [constant.PLAYERCOUNT][constant.TETRISSTORECOUNT]TetrisSite
-
-	playerList [constant.PLAYERCOUNT]string
-
-	playerMap map[string]int
-
-	tetrisIndexList [constant.PLAYERCOUNT][constant.TETRISTYPELENGTH]int
-}
-
 var (
 	// tetris 運轉規則
 	tetrisRule [constant.TETRISTYPELENGTH][constant.TETRIS_ROTATE_TYPE][constant.TETRIS_X][constant.TETRIS_Y]int
@@ -62,6 +27,47 @@ var (
 	tetrisMidInitialPointY = constant.TETRISLENGTH
 )
 
+// Commond Struct
+type TetrisCommond struct {
+	Player  string
+	Commond int
+}
+
+// tetris Struct
+type TetrisSite struct {
+	TetrisName string
+
+	TetrisType       string
+	TetrisRotateType int
+
+	Coordinate [constant.TETRIS_COORDINATE_COUNT][constant.TETRIS_COUNT]int
+}
+
+// Server struct
+type Server struct {
+	Start chan bool
+	End   chan bool
+
+	PlayerCommond chan TetrisCommond
+
+	TetrisMap [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string
+
+	TetrisNow [constant.PLAYERCOUNT]*TetrisSite
+
+	TetrisWaiting [constant.PLAYERCOUNT][constant.TETRIS_WAITING_COUNT]*TetrisSite
+
+	TetrisStore [constant.PLAYERCOUNT][constant.TETRIS_STORE_COUNT]TetrisSite
+
+	TetrisCombo [constant.PLAYERCOUNT]int
+
+	PlayerList [constant.PLAYERCOUNT]string
+
+	PlayerMap map[string]int
+
+	TetrisIndexList [constant.PLAYERCOUNT][constant.TETRISTYPELENGTH]int
+}
+
+// tetris.go 初始化
 func Initialize() {
 	InitializeTetrisRule(&tetrisRule)
 
@@ -75,16 +81,17 @@ func Initialize() {
 
 }
 
+// 初始化Server
 func InitialServer() Server {
 	var newServer = Server{
 		Start: make(chan bool),
 		End:   make(chan bool),
 
-		tetrisMap: [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string{},
+		TetrisMap: [constant.PLAYERCOUNT][constant.TETRISLENGTH][constant.TETRISWIDTH]string{},
 
-		playerCommond: make(chan TetrisCommond),
+		PlayerCommond: make(chan TetrisCommond),
 
-		playerMap: make(map[string]int),
+		PlayerMap: make(map[string]int),
 	}
 
 	ResetServer(&newServer)
@@ -92,47 +99,68 @@ func InitialServer() Server {
 	return newServer
 }
 
-func StartGame(room string) {
+// 開始遊戲
+func StartGame(tetrisS *Server, room string, id string) {
+	for i := range tetrisS.PlayerList {
+		if tetrisS.PlayerList[i] == "" {
+			tetrisS.PlayerList[i] = id
+			tetrisS.PlayerMap[id] = i
+			break
+		}
+	}
+
 	tetrisServer[room].Start <- true
 }
 
-func EndGame(room string) {
+// 結束遊戲
+func EndGame(tetrisS *Server, room string, id string) {
+	for i := range tetrisS.PlayerList {
+		tetrisS.PlayerList[i] = ""
+	}
+
 	tetrisServer[room].End <- true
 }
 
+// 遊戲開始前倒數
+func CountDown() {
+
+}
+
+// 重置Server
 func ResetServer(tetrisS *Server) {
-	for i := range tetrisS.tetrisMap {
-		for j := range tetrisS.tetrisMap[i] {
-			for k := range tetrisS.tetrisMap[i][j] {
-				tetrisS.tetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
-				tetrisS.tetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
+	for i := range tetrisS.TetrisMap {
+		for j := range tetrisS.TetrisMap[i] {
+			for k := range tetrisS.TetrisMap[i][j] {
+				tetrisS.TetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
+				tetrisS.TetrisMap[i][j][k] = constant.TETRIS_MAP_EMPTY
 			}
 		}
 	}
 
-	for i := range tetrisS.tetrisIndexList {
-		for j := range tetrisS.tetrisIndexList[i] {
-			tetrisS.tetrisIndexList[i][j] = 0
+	for i := range tetrisS.TetrisIndexList {
+		for j := range tetrisS.TetrisIndexList[i] {
+			tetrisS.TetrisIndexList[i][j] = 0
 		}
 	}
 
-	for i := range tetrisS.tetrisNow {
-		tetrisS.tetrisNow[i] = CreateNewTetris(&tetrisS.tetrisIndexList[i])
+	for i := range tetrisS.TetrisNow {
+		tetrisS.TetrisNow[i] = CreateNewTetris(&tetrisS.TetrisIndexList[i])
 	}
 
-	for i := range tetrisS.tetrisWaiting {
-		for j := range tetrisS.tetrisWaiting[i] {
-			tetrisS.tetrisWaiting[i][j] = CreateNewTetris(&tetrisS.tetrisIndexList[i])
+	for i := range tetrisS.TetrisWaiting {
+		for j := range tetrisS.TetrisWaiting[i] {
+			tetrisS.TetrisWaiting[i][j] = CreateNewTetris(&tetrisS.TetrisIndexList[i])
 		}
 	}
 
-	for i := range tetrisS.playerList {
-		tetrisS.playerMap[tetrisS.playerList[i]] = i
+	for i := range tetrisS.PlayerList {
+		tetrisS.PlayerMap[tetrisS.PlayerList[i]] = i
 	}
 	log.Println("[Server Msg] Reset Server Success...")
 	return
 }
 
+// Server運行
 func runServer(roomName string, tetrisS *Server) {
 	log.Println("[Server Msg]", roomName, "Server is runing...")
 	var endMoving = make(chan bool)
@@ -151,9 +179,14 @@ func runServer(roomName string, tetrisS *Server) {
 						return
 					default:
 						// tetris moving + waiting
-						TetrisMoving(&tetrisS.tetrisMap[constant.PLAYER_A], &tetrisS.tetrisNow[constant.PLAYER_A])
-						TetrisMoving(&tetrisS.tetrisMap[constant.PLAYER_B], &tetrisS.tetrisNow[constant.PLAYER_B])
+						for i := 0; i < constant.PLAYERCOUNT; i++ {
+							TetrisMoving(&tetrisS.TetrisMap[i], tetrisS.TetrisNow[i])
+							if FloorCheck(tetrisS.TetrisMap[i], tetrisS.TetrisNow[i]) {
+								PopWaitingTetris(tetrisS.TetrisNow[i], &tetrisS.TetrisWaiting[i], &tetrisS.TetrisIndexList[i])
+							}
+						}
 						time.Sleep(constant.TETRIS_FALL_SPEED * time.Second)
+
 					}
 				}
 
@@ -162,7 +195,7 @@ func runServer(roomName string, tetrisS *Server) {
 				for {
 					select {
 					// player commond
-					case c := <-tetrisS.playerCommond:
+					case c := <-tetrisS.PlayerCommond:
 						log.Println(c)
 					case <-tetrisS.End:
 						// game end
@@ -301,16 +334,17 @@ func InitializeTetrisRule(tetrisRotate *[constant.TETRISTYPELENGTH][constant.TET
 	return
 }
 
-func TetrisMoving(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
-	crash, err := CrashCheck(*tetrisMap, *t, constant.TETRIS_CRASH_TYPE_FALL)
+// 方塊向下移動
+func TetrisMoving(TetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
+	crash, err := CrashCheck(*TetrisMap, *t, constant.TETRIS_CRASH_TYPE_FALL)
 	if err != nil {
 		return false, err
 	}
 	if crash {
 		for i := range t.Coordinate[constant.TETRIS_COORDINATE_Y] {
-			tetrisMap[constant.TETRIS_COORDINATE_Y][i] = constant.TETRIS_MAP_EMPTY
+			TetrisMap[constant.TETRIS_COORDINATE_Y][i] = constant.TETRIS_MAP_EMPTY
 			t.Coordinate[constant.TETRIS_COORDINATE_Y][i] -= constant.TETRIS_MOVE_SPEED
-			tetrisMap[constant.TETRIS_COORDINATE_Y][i] = t.TetrisName
+			TetrisMap[constant.TETRIS_COORDINATE_Y][i] = t.TetrisName
 		}
 	} else {
 		return false, nil
@@ -319,8 +353,9 @@ func TetrisMoving(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string
 	return true, nil
 }
 
-func TetrisRotate(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
-	crash, err := CrashCheck(*tetrisMap, *t, constant.TETRIS_CRASH_TYPE_ROTATE)
+// 方塊旋轉
+func TetrisRotate(TetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) (bool, error) {
+	crash, err := CrashCheck(*TetrisMap, *t, constant.TETRIS_CRASH_TYPE_ROTATE)
 	if err != nil {
 		return false, err
 	}
@@ -339,15 +374,16 @@ func TetrisRotate(tetrisMap *[constant.TETRISLENGTH][constant.TETRISWIDTH]string
 	return true, nil
 }
 
-func CreateNewTetris(tetrisIndexList *[constant.TETRISTYPELENGTH]int) TetrisSite {
+// 新增一個 Tetris
+func CreateNewTetris(TetrisIndexList *[constant.TETRISTYPELENGTH]int) *TetrisSite {
 	var (
 		tetrisDex      string
 		newTetrixIndex = rand.Intn(constant.TETRISTYPELENGTH - 1)
 	)
 
-	tetrisIndexList[newTetrixIndex] += 1
+	TetrisIndexList[newTetrixIndex] += 1
 
-	tetrisDex = strconv.Itoa(tetrisIndexList[newTetrixIndex])
+	tetrisDex = strconv.Itoa(TetrisIndexList[newTetrixIndex])
 
 	newTetris := TetrisSite{
 		TetrisName:       tetrisList[newTetrixIndex] + tetrisDex,
@@ -356,7 +392,7 @@ func CreateNewTetris(tetrisIndexList *[constant.TETRISTYPELENGTH]int) TetrisSite
 		Coordinate:       tetrisStartSite[newTetrixIndex],
 	}
 
-	return newTetris
+	return &newTetris
 }
 
 // 碰撞檢查
@@ -392,12 +428,39 @@ func CrashCheck(tetrisM [constant.TETRISLENGTH][constant.TETRISWIDTH]string, t T
 	return true, nil
 }
 
+// 方塊到底檢查
+func FloorCheck(tetrisMap [constant.TETRISLENGTH][constant.TETRISWIDTH]string, t *TetrisSite) bool {
+	// 檢查到底和下面有方塊無法移動
+	for i := range t.Coordinate {
+		if t.Coordinate[constant.TETRIS_COORDINATE_Y][i] == 0 {
+			return true
+		} else {
+			if tetrisMap[t.Coordinate[constant.TETRIS_COORDINATE_X][i]][t.Coordinate[constant.TETRIS_COORDINATE_Y][i]-1] != constant.TETRIS_MAP_EMPTY {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // 暫存方塊
-func TetrisStore(tS *TetrisSite, t *TetrisSite, tetrisIndexList *[constant.TETRISTYPELENGTH]int) (bool, error) {
+func TetrisStore(tS *TetrisSite, t *TetrisSite, TetrisIndexList *[constant.TETRISTYPELENGTH]int) (bool, error) {
 	tS = t
 	tS.TetrisRotateType = constant.TETRIS_ROTATE_INITIAL_TYPE
 
-	*t = CreateNewTetris(tetrisIndexList)
+	t = CreateNewTetris(TetrisIndexList)
 
 	return true, nil
+}
+
+// Pop新方塊
+func PopWaitingTetris(t *TetrisSite, waitingT *[constant.TETRIS_WAITING_COUNT]*TetrisSite, tetrisIndexList *[constant.TETRISTYPELENGTH]int) {
+	t = waitingT[0]
+
+	for i := 0; i < constant.TETRIS_WAITING_COUNT-1; i++ {
+		waitingT[i] = waitingT[i+1]
+	}
+
+	waitingT[constant.TETRIS_WAITING_COUNT-1] = CreateNewTetris(tetrisIndexList)
+	return
 }
